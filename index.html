@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Website Screenshot Tool</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f7fa;
+            color: #333;
+        }
+        .container {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px 0 0 4px;
+            font-size: 16px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover:not(:disabled) {
+            background-color: #2980b9;
+        }
+        button:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+        #scanButton {
+            border-radius: 0 4px 4px 0;
+        }
+        #downloadButton {
+            width: 100%;
+            margin-top: 15px;
+            border-radius: 4px;
+            display: block;
+        }
+        #result {
+            margin-top: 30px;
+            text-align: center;
+        }
+        .screenshot {
+            max-width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #3498db;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            color: #e74c3c;
+            margin-top: 10px;
+        }
+        .instructions {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .screenshot-container {
+            margin-top: 20px;
+        }
+        .screenshot-info {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Website Screenshot Tool</h1>
+        
+        <div class="instructions">
+            <p>Enter a website domain (e.g., "example.com" or "github.com") and click "Scan" to capture a screenshot of the homepage.</p>
+        </div>
+        
+        <div class="input-group">
+            <input type="text" id="domainInput" placeholder="Enter domain name (e.g., google.com)" autocomplete="off">
+            <button id="scanButton">Scan</button>
+        </div>
+        
+        <button id="downloadButton" disabled>Download Screenshot</button>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Capturing screenshot...</p>
+        </div>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const domainInput = document.getElementById('domainInput');
+            const scanButton = document.getElementById('scanButton');
+            const downloadButton = document.getElementById('downloadButton');
+            const resultDiv = document.getElementById('result');
+            const loadingDiv = document.getElementById('loading');
+            
+            let currentScreenshotBlob = null;
+            let currentDomain = '';
+            
+            scanButton.addEventListener('click', captureScreenshot);
+            downloadButton.addEventListener('click', downloadScreenshot);
+            
+            domainInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    captureScreenshot();
+                }
+            });
+            
+            function captureScreenshot() {
+                const domain = domainInput.value.trim();
+                
+                if (!domain) {
+                    showError('Please enter a domain name.');
+                    return;
+                }
+                
+                // Basic domain validation
+                const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/;
+                if (!domainRegex.test(domain)) {
+                    showError('Please enter a valid domain name (e.g., example.com).');
+                    return;
+                }
+                
+                // Disable download button until new screenshot is ready
+                downloadButton.disabled = true;
+                
+                // Show loading spinner
+                loadingDiv.style.display = 'block';
+                resultDiv.innerHTML = '';
+                
+                // Using a free screenshot API service (Screenshot API by ApiFlash)
+                const apiKey = 'demo'; // Replace with your API key for production
+                const url = `https://api.apiflash.com/v1/urltoimage?access_key=${apiKey}&url=https://${domain}&format=jpeg&quality=80&width=1200&height=800`;
+                
+                fetch(url)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Failed to capture screenshot');
+                        }
+                        return response.blob();
+                    })
+                    .then(blob => {
+                        // Store the blob for download functionality
+                        currentScreenshotBlob = blob;
+                        currentDomain = domain;
+                        
+                        const imageUrl = URL.createObjectURL(blob);
+                        displayScreenshot(imageUrl, domain);
+                        
+                        // Enable download button
+                        downloadButton.disabled = false;
+                    })
+                    .catch(error => {
+                        showError('Failed to capture screenshot. Please try again or check if the domain exists.');
+                        console.error('Error:', error);
+                    })
+                    .finally(() => {
+                        loadingDiv.style.display = 'none';
+                    });
+            }
+            
+            function displayScreenshot(imageUrl, domain) {
+                const timestamp = new Date().toLocaleString();
+                
+                resultDiv.innerHTML = `
+                    <div class="screenshot-container">
+                        <h2>Screenshot of ${domain}</h2>
+                        <img src="${imageUrl}" alt="Screenshot of ${domain}" class="screenshot" id="screenshotImage">
+                        <p class="screenshot-info">
+                            Screenshot captured at ${timestamp}
+                        </p>
+                    </div>
+                `;
+            }
+            
+            function downloadScreenshot() {
+                if (!currentScreenshotBlob) {
+                    showError('No screenshot available to download.');
+                    return;
+                }
+                
+                // Create a download link
+                const downloadUrl = URL.createObjectURL(currentScreenshotBlob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = `${currentDomain}-screenshot.jpg`;
+                
+                // Append to the body, click, and remove
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                // Clean up the object URL
+                URL.revokeObjectURL(downloadUrl);
+            }
+            
+            function showError(message) {
+                resultDiv.innerHTML = `<p class="error">${message}</p>`;
+                loadingDiv.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
