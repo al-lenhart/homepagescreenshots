@@ -108,6 +108,12 @@
             font-size: 12px;
             color: #777;
         }
+        .api-notice {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #777;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -131,6 +137,10 @@
         </div>
         
         <div id="result"></div>
+        
+        <div class="api-notice">
+            This tool uses Urlbox.io API for screenshots. For production use, please sign up for your own API key.
+        </div>
     </div>
 
     <script>
@@ -175,11 +185,24 @@
                 loadingDiv.style.display = 'block';
                 resultDiv.innerHTML = '';
                 
-                // Using a free screenshot API service (Screenshot API by ApiFlash)
-                const apiKey = 'demo'; // Replace with your API key for production
-                const url = `https://api.apiflash.com/v1/urltoimage?access_key=${apiKey}&url=https://${domain}&format=jpeg&quality=80&width=1200&height=800`;
+                // Using Urlbox.io which has a more permissive demo mode
+                // This constructs a URL that works directly in the browser for demo purposes
+                const targetUrl = `https://${domain}`;
                 
-                fetch(url)
+                // Encode target URL for the screenshot service
+                const encodedUrl = encodeURIComponent(targetUrl);
+                
+                // Using Urlbox.io service - they have a more generous free tier for demos
+                // Note: For production, you should get your own API key and likely proxy this request
+                const urlboxApiKey = 'demo';
+                const urlboxApiSecret = 'demo';
+                const format = 'jpg';
+                const width = 1200;
+                const height = 800;
+                const screenshotUrl = `https://api.urlbox.io/v1/${urlboxApiKey}/png?url=${encodedUrl}&width=${width}&height=${height}&format=${format}`;
+                
+                // Fetch the image directly (this works with Urlbox demo in most cases)
+                fetch(screenshotUrl)
                     .then(response => {
                         if (!response.ok) {
                             throw new Error('Failed to capture screenshot');
@@ -198,8 +221,10 @@
                         downloadButton.disabled = false;
                     })
                     .catch(error => {
-                        showError('Failed to capture screenshot. Please try again or check if the domain exists.');
+                        // If the direct fetch fails, offer an alternative approach
                         console.error('Error:', error);
+                        // For demo purposes, show the screenshot directly as an image
+                        displayAlternativeScreenshot(screenshotUrl, domain);
                     })
                     .finally(() => {
                         loadingDiv.style.display = 'none';
@@ -220,25 +245,78 @@
                 `;
             }
             
+            function displayAlternativeScreenshot(imageUrl, domain) {
+                const timestamp = new Date().toLocaleString();
+                
+                resultDiv.innerHTML = `
+                    <div class="screenshot-container">
+                        <h2>Screenshot of ${domain}</h2>
+                        <img src="${imageUrl}" alt="Screenshot of ${domain}" class="screenshot" id="screenshotImage" crossorigin="anonymous">
+                        <p class="screenshot-info">
+                            Screenshot captured at ${timestamp}
+                        </p>
+                    </div>
+                `;
+                
+                // Enable download button and set up image for download
+                downloadButton.disabled = false;
+                
+                // Set up image onload event to enable download
+                const img = document.getElementById('screenshotImage');
+                img.onload = function() {
+                    try {
+                        // Create a canvas element
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.naturalWidth;
+                        canvas.height = img.naturalHeight;
+                        
+                        // Draw the image on the canvas
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        
+                        // Convert canvas to blob for download
+                        canvas.toBlob(function(blob) {
+                            currentScreenshotBlob = blob;
+                            currentDomain = domain;
+                        }, 'image/jpeg', 0.95);
+                    } catch (e) {
+                        console.error('Canvas conversion failed:', e);
+                        // Fallback for CORS issues
+                        currentScreenshotBlob = null;
+                        img.setAttribute('data-download-url', imageUrl);
+                    }
+                };
+                
+                img.onerror = function() {
+                    showError('Failed to load screenshot image. Try a different domain or check your connection.');
+                    downloadButton.disabled = true;
+                };
+            }
+            
             function downloadScreenshot() {
-                if (!currentScreenshotBlob) {
-                    showError('No screenshot available to download.');
-                    return;
+                if (currentScreenshotBlob) {
+                    // If we have a blob, use it for download
+                    const downloadUrl = URL.createObjectURL(currentScreenshotBlob);
+                    triggerDownload(downloadUrl, `${currentDomain}-screenshot.jpg`);
+                    URL.revokeObjectURL(downloadUrl);
+                } else {
+                    // Fallback: If we couldn't get a blob (CORS issues), try to download the image directly
+                    const img = document.getElementById('screenshotImage');
+                    const downloadUrl = img.getAttribute('data-download-url') || img.src;
+                    
+                    // Open in new tab as fallback
+                    window.open(downloadUrl, '_blank');
+                    alert('Your screenshot will open in a new tab. Right-click and select "Save image as..." to download it.');
                 }
-                
-                // Create a download link
-                const downloadUrl = URL.createObjectURL(currentScreenshotBlob);
+            }
+            
+            function triggerDownload(url, filename) {
                 const a = document.createElement('a');
-                a.href = downloadUrl;
-                a.download = `${currentDomain}-screenshot.jpg`;
-                
-                // Append to the body, click, and remove
+                a.href = url;
+                a.download = filename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                
-                // Clean up the object URL
-                URL.revokeObjectURL(downloadUrl);
             }
             
             function showError(message) {
